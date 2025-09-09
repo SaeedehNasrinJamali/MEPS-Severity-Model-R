@@ -1,4 +1,4 @@
-# MEPS Severity Modeling in R — GLM + XGBoost
+# MEPS Severity Modeling in R, GLM + XGBoost
 
 This is an end-to-end R project that cleans MEPS data, engineers features, builds a **Gamma GLM (log link)** as a classic actuarial baseline, and adds a **tree-based XGBoost** model as a non-linear benchmark. The repository includes data cleaning, winsorization, train/test evaluation, model diagnostics, hyperparameter tuning, and interpretability.
 
@@ -129,5 +129,6 @@ For interpretability, we also report metrics against the original `TOTEXP20` whe
 ![Predicted vs Actual](docs/xgb_pred_vs_actual_baseline.png)
 
 ![Top-10 Feature Importance](docs/xgb_importance_top10_baseline.png)
+
 
 
