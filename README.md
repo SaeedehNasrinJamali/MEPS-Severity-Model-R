@@ -124,4 +124,10 @@ For interpretability, we also report metrics against the original `TOTEXP20` whe
 ### Encoding notes (for XGBoost)
 - All factors above are **one-hot encoded** via `fastDummies::dummy_cols(..., remove_first_dummy=TRUE)` before XGBoost.
 - The winsorized target is used for training; you additionally report a **corrected MAPE** against the original `TOTEXP20` for business interpretability.
+### XGBoost Results
+
+![Predicted vs Actual](docs/xgb_pred_vs_actual_baseline.png)
+
+![Top-10 Feature Importance](docs/xgb_importance_top10_baseline.png)
+
 
