@@ -1,0 +1,149 @@
+# scripts/06_xgboost_tuning.R
+# Runs two caret grid-searches (small & large), evaluates both on the same test set,
+# saves metrics/plots/models, and writes a comparison table.
+
+suppressPackageStartupMessages({
+  library(dplyr)
+  library(fastDummies)
+  library(xgboost)
+  library(caret)
+  library(ggplot2)
+  library(readr)
+})
+
+# --- Load cleaned data and shared split ---
+dat <- readRDS("outputs/MEPS_clean.rds")
+idx <- readRDS("outputs/split_idx.rds")
+
+# --- One-hot encode factors (same design for train & test) ---
+MEPS_dummy <- fastDummies::dummy_cols(
+  dat,
+  select_columns = c("SEX","INSCOV20","RACEV1X","OFTSMK53","CHDDX","ASTHDX",
+                     "DIABDX_M18","HIBPDX","MIDX","EMPHDX","CANCERDX"),
+  remove_first_dummy = TRUE,
+  remove_selected_columns = TRUE
+)
+
+train <- MEPS_dummy[idx$train_idx, ]
+test  <- MEPS_dummy[idx$test_idx,  ]
+
+X_train <- dplyr::select(train, -TOTEXP20, -TOTEXP20_winsorized)
+y_train <- train$TOTEXP20_winsorized
+X_test  <- dplyr::select(test,  -TOTEXP20, -TOTEXP20_winsorized)
+y_test  <- test$TOTEXP20_winsorized
+y_orig  <- dat[idx$test_idx, ]$TOTEXP20  # non-winsorized for corrected MAPE
+
+# Helper to compute metrics in a consistent way
+metrics_from_pred <- function(pred, y_w, y_orig) {
+  eps <- 1e-8
+  MAE  <- mean(abs(y_w - pred))
+  RMSE <- sqrt(mean((y_w - pred)^2))
+  R2   <- 1 - sum((y_w - pred)^2) / sum((y_w - mean(y_w))^2)
+  MAPE_wins <- mean(abs((y_w - pred) / (y_w + eps))) * 100
+  MAPE_orig <- mean(abs((y_orig - pred) / (y_orig + eps))) * 100
+  data.frame(MAE=MAE, RMSE=RMSE, R2=R2,
+             MAPE_winsorized_pct=MAPE_wins, MAPE_original_pct=MAPE_orig)
+}
+
+# Common CV settings
+set.seed(123)
+fitControl <- trainControl(method = "cv", number = 5, verboseIter = TRUE)
+
+dir.create("outputs/models", recursive = TRUE, showWarnings = FALSE)
+dir.create("outputs/figures", recursive = TRUE, showWarnings = FALSE)
+
+# =========================
+# 1) SMALL GRID (your first run)
+# =========================
+xgbGrid_small <- expand.grid(
+  nrounds = c(50, 100, 150),
+  max_depth = c(2, 4, 6),
+  eta = c(0.01, 0.1),
+  gamma = 0,
+  colsample_bytree = c(0.6, 0.8),
+  subsample = c(0.6, 0.8),
+  min_child_weight = 1
+)
+
+xgb_small <- caret::train(
+  x = as.matrix(X_train),
+  y = y_train,
+  method = "xgbTree",
+  trControl = fitControl,
+  tuneGrid = xgbGrid_small,
+  metric = "RMSE"
+)
+
+saveRDS(xgb_small, "outputs/models/xgb_tuned_small.rds")
+p_small <- plot(xgb_small)
+ggsave("outputs/figures/xgb_caret_tuning_small.png", p_small, width = 8, height = 6, dpi = 150)
+
+pred_small <- predict(xgb_small, as.matrix(X_test))
+m_small <- metrics_from_pred(pred_small, y_test, y_orig)
+m_small <- cbind(Model = "XGB_Tuned_SmallGrid", m_small)
+
+# Importance (small)
+imp_small <- xgboost::xgb.importance(
+  feature_names = colnames(X_train),
+  model = xgb_small$finalModel
+)
+readr::write_csv(imp_small, "outputs/xgb_importance_tuned_small.csv")
+p_imp_small <- xgboost::xgb.plot.importance(imp_small[1:min(10, nrow(imp_small)), ])
+ggsave("outputs/figures/xgb_importance_top10_tuned_small.png", p_imp_small, width = 7, height = 5, dpi = 150)
+
+# =========================
+# 2) LARGE GRID (your second run)
+# =========================
+xgbGrid_large <- expand.grid(
+  nrounds = c(100, 250, 500, 1000),
+  max_depth = c(4, 6, 8, 10),
+  eta = c(0.01, 0.05, 0.1),
+  gamma = c(0, 0.1, 0.2),
+  colsample_bytree = c(0.6, 0.8, 1.0),
+  subsample = c(0.6, 0.8, 1.0),
+  min_child_weight = 1
+)
+
+set.seed(123)
+xgb_large <- caret::train(
+  x = as.matrix(X_train),
+  y = y_train,
+  method = "xgbTree",
+  trControl = fitControl,
+  tuneGrid = xgbGrid_large,
+  metric = "RMSE"
+)
+
+saveRDS(xgb_large, "outputs/models/xgb_tuned_large.rds")
+p_large <- plot(xgb_large)
+ggsave("outputs/figures/xgb_caret_tuning_large.png", p_large, width = 8, height = 6, dpi = 150)
+
+pred_large <- predict(xgb_large, as.matrix(X_test))
+m_large <- metrics_from_pred(pred_large, y_test, y_orig)
+m_large <- cbind(Model = "XGB_Tuned_LargeGrid", m_large)
+
+# Importance (large)
+imp_large <- xgboost::xgb.importance(
+  feature_names = colnames(X_train),
+  model = xgb_large$finalModel
+)
+readr::write_csv(imp_large, "outputs/xgb_importance_tuned_large.csv")
+p_imp_large <- xgboost::xgb.plot.importance(imp_large[1:min(10, nrow(imp_large)), ])
+ggsave("outputs/figures/xgb_importance_top10_tuned_large.png", p_imp_large, width = 7, height = 5, dpi = 150)
+
+# =========================
+# 3) Save comparison + pick a "best"
+# =========================
+compare <- dplyr::bind_rows(m_small, m_large)
+readr::write_csv(compare, "outputs/xgb_metrics_tuned_compare.csv")
+
+# Choose best by R2 (you can switch to RMSE if you prefer)
+best <- if (m_large$R2[1] >= m_small$R2[1]) "large" else "small"
+if (best == "large") {
+  file.copy("outputs/models/xgb_tuned_large.rds", "outputs/models/xgb_tuned.rds", overwrite = TRUE)
+} else {
+  file.copy("outputs/models/xgb_tuned_small.rds", "outputs/models/xgb_tuned.rds", overwrite = TRUE)
+}
+
+message("Tuning complete. Metrics -> outputs/xgb_metrics_tuned_compare.csv")
+print(compare)
