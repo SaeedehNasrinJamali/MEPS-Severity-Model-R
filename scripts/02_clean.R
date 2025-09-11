@@ -15,13 +15,44 @@ cat("Rows after basic filters:", nrow(MEPS), "\n")
 # ---- Variable selection ----
 MEPSSELECTED <- dplyr::select(
   MEPS,
-  TOTEXP20, AGELAST, SEX, INSCOV20, RACEV1X, ADBMI42, FAMINC20, OFTSMK53,
-  CHDDX, ASTHDX, DIABDX_M18, HIBPDX, MIDX, EMPHDX, CANCERDX,
-  IPDIS20, OBTOTV20, OPTOTV20, HHTOTD20, ERTOT20, RXTOT20,
-  CACOLON, CALUNG, CALYMPH, CAMELANO, CAOTHER, CAPROSTA, CASKINDK,
-  CASKINNM, CAUTERUS, CABLADDR, CABREAST
+  TOTEXP20,   # Target: total expenditures in 2020
+  AGELAST,    # Age at end of 2020
+  SEX,        # Gender
+  INSCOV20,   # Insurance coverage in 2020
+  RACEV1X,    # Race/ethnicity
+  ADBMI42,    # BMI
+  FAMINC20,   # Family income (2020)
+  OFTSMK53,   # Smoking frequency
+
+  # Chronic condition indicators (binary Yes/No)
+  CHDDX,      # Coronary heart disease
+  ASTHDX,     # Asthma
+  DIABDX_M18, # Diabetes (merged)
+  HIBPDX,     # High blood pressure
+  MIDX,       # Myocardial infarction
+  EMPHDX,     # Emphysema
+  CANCERDX,   # Any cancer
+
+  # Cancer site-specific flags (binary Yes/No)
+  CACOLON,    # Colorectal cancer
+  CALUNG,     # Lung cancer
+  CALYMPH,    # Lymphoma
+  CAMELANO,   # Melanoma
+  CAOTHER,    # Other cancer
+  CAPROSTA,   # Prostate cancer
+  CASKINDK,   # Skin cancer (unknown type)
+  CASKINNM,   # Skin cancer non-melanoma
+  CAUTERUS,   # Uterine cancer
+  CABLADDR,   # Bladder cancer
+  CABREAST    # Breast cancer
 )
 
+MEPSSELECTED <- MEPSSELECTED %>%
+  dplyr::select(
+    -IPDIS20, -OBTOTV20, -OPTOTV20, -HHTOTD20, -ERTOT20, -RXTOT20,  # utilization
+    -CACOLON, -CALUNG, -CALYMPH, -CAMELANO, -CAOTHER,              # site-specific
+    -CAPROSTA, -CASKINDK, -CASKINNM, -CAUTERUS, -CABLADDR, -CABREAST
+  )
 # ---- Invalid codes -> NA ----
 MEPSSELECTED <- MEPSSELECTED %>%
   dplyr::mutate(
@@ -37,26 +68,6 @@ MEPSSELECTED <- MEPSSELECTED %>%
     HHTOTD20    = dplyr::if_else(HHTOTD20    < 0,                  NA_real_, HHTOTD20),
     FAMINC20    = dplyr::if_else(FAMINC20    < 0,                  NA_real_, FAMINC20)
   )
-
-# ---- Cancer site flags from raw CA* vars ----
-site_vars <- c("CACOLON","CALUNG","CALYMPH","CAMELANO","CAOTHER",
-               "CAPROSTA","CASKINDK","CASKINNM","CAUTERUS","CABLADDR","CABREAST")
-
-recode_cancer_sites <- function(dat, site_vars) {
-  dat2 <- dat
-  for (v in site_vars) {
-    dat2 <- dat2 %>%
-      dplyr::mutate(!!rlang::sym(paste0(v, "_flag")) :=
-        dplyr::case_when(
-          .data[[v]] == 1 ~ 1,
-          .data[[v]] %in% c(2, -1) ~ 0,
-          TRUE ~ NA_real_
-        )
-      )
-  }
-  dat2
-}
-MEPSSELECTED <- recode_cancer_sites(MEPSSELECTED, site_vars)
 
 # ---- Factors with readable labels ----
 MEPSSELECTED <- MEPSSELECTED %>%
@@ -88,3 +99,4 @@ dir.create("outputs", showWarnings = FALSE)
 saveRDS(MEPSSELECTED_winsorized, "outputs/MEPS_clean.rds")
 
 cat("Clean data saved to outputs/MEPS_clean.rds\n")
+
