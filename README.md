@@ -32,7 +32,7 @@ For interpretability, we also report metrics against the original `TOTEXP20` whe
 - **Lifestyle**: `OFTSMK53` (smoking frequency)
 - **Anthropometrics**: `ADBMI42` (BMI)
 - **Chronic Conditions** (binary factors): `CHDDX`, `ASTHDX`, `DIABDX_M18`, `HIBPDX`, `MIDX`, `EMPHDX`, `CANCERDX`
-- **Cancer Sites (raw)**: `CACOLON`, `CALUNG`, `CALYMPH`, `CAMELANO`, `CAOTHER`, `CAPROSTA`, `CASKINDK`, `CASKINNM`, `CAUTERUS`, `CABLADDR`, `CABREAST`
+- **Cancer Sites (raw)**: `CACOLON`, `CALUNG`, `CALYMPH`, `CAMELANO`, `CAOTHER`, `CAPROSTA`, `CASKINDK`, `CASKINNM`, `CAUTERUS`, `CABLADDR`, `CABREAST` # will be added
 - **Engineered Flags**: `*_flag` created from each `CA*` site (`1` present, `0` absent, `NA` unknown)
 
 ### Cleaning & Encoding
@@ -52,6 +52,7 @@ For interpretability, we also report metrics against the original `TOTEXP20` whe
 ### XGBoost Results
 
 ![Predicted vs Actual](docs/xgb_pred_vs_actual_baseline.png)
+
 
 
 
