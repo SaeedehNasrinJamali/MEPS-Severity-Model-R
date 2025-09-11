@@ -3,7 +3,7 @@
 # Load cleaned data
 dat <- readRDS("outputs/MEPS_clean.rds")
 
-# ---- Train/test split (reuse if it already exists) ----
+# Reuse the same split everywhere
 if (file.exists("outputs/split_idx.rds")) {
   idx <- readRDS("outputs/split_idx.rds")
   train_idx <- idx$train_idx
@@ -75,4 +75,5 @@ write.csv(pseudo_r2, "outputs/pseudo_r2.csv", row.names = FALSE)
 vif_ok <- TRUE
 vifs <- tryCatch(car::vif(stepwise_model), error = function(e) { vif_ok <<- FALSE; e })
 if (vif_ok) write.csv(as.data.frame(vifs), "outputs/vif.csv")
+
 
