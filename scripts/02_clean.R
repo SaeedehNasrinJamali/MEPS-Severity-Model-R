@@ -2,11 +2,11 @@
 # (Assumes packages are loaded in scripts/01_setup.R)
 
 # ---- Load & basic filters ----
-data_path <- "data/H224.xlsx"        # relative path
+data_path <- "data/H224.xlsx"
 MEPS <- readxl::read_excel(data_path)
 names(MEPS) <- trimws(names(MEPS))
 
-# Keep adults with positive total expenditures (severity among claimants)
+# Keep adults with positive total expenditures
 MEPS <- MEPS[MEPS$TOTEXP20 > 0, ]
 MEPS <- MEPS[MEPS$AGELAST > 17, ]
 cat("Rows after basic filters:", nrow(MEPS), "\n")
@@ -14,22 +14,9 @@ cat("Rows after basic filters:", nrow(MEPS), "\n")
 # ---- Variable selection (NO utilization, NO cancer) ----
 MEPSSELECTED <- dplyr::select(
   MEPS,
-  TOTEXP20,   # Target: total expenditures in 2020
-  AGELAST,    # Age at end of 2020
-  SEX,        # Gender
-  INSCOV20,   # Insurance coverage in 2020
-  RACEV1X,    # Race/ethnicity
-  ADBMI42,    # BMI
-  FAMINC20,   # Family income (2020)
-  OFTSMK53,   # Smoking frequency
-
-  # Chronic condition indicators (binary Yes/No)
-  CHDDX,      # Coronary heart disease
-  ASTHDX,     # Asthma
-  DIABDX_M18, # Diabetes (merged)
-  HIBPDX,     # High blood pressure
-  MIDX,       # Myocardial infarction
-  EMPHDX      # Emphysema
+  TOTEXP20,   # Target
+  AGELAST, SEX, INSCOV20, RACEV1X, ADBMI42, FAMINC20, OFTSMK53,
+  CHDDX, ASTHDX, DIABDX_M18, HIBPDX, MIDX, EMPHDX
 )
 
 # ---- Invalid codes -> NA (type-stable) ----
@@ -61,19 +48,16 @@ MEPSSELECTED <- MEPSSELECTED %>%
     EMPHDX     = factor(EMPHDX,     levels = c(2,1),  labels = c("No Emphysema","Yes Emphysema"))
   )
 
-# ---- Drop incomplete rows (baseline approach) ----
-MEPSSELECTED_transformed <- MEPSSELECTED[complete.cases(MEPSSELECTED), ]
-cat("Rows after complete-cases drop:", nrow(MEPSSELECTED_transformed), "\n")
+# ---- Drop incomplete rows ----
+MEPS_cc <- MEPSSELECTED[complete.cases(MEPSSELECTED), ]
+cat("Rows after complete-cases drop:", nrow(MEPS_cc), "\n")
 
 # ---- Winsorize target at p99 ----
-TOTEXP20_99 <- stats::quantile(MEPSSELECTED_transformed$TOTEXP20, 0.99, na.rm = TRUE)
-MEPSSELECTED_winsorized <- MEPSSELECTED_transformed %>%
+TOTEXP20_99 <- stats::quantile(MEPS_cc$TOTEXP20, 0.99, na.rm = TRUE)
+MEPS_w <- MEPS_cc %>%
   dplyr::mutate(TOTEXP20_winsorized = ifelse(TOTEXP20 > TOTEXP20_99, TOTEXP20_99, TOTEXP20))
 
-# ---- Save cleaned data for downstream scripts ----
+# ---- Save cleaned data ----
 dir.create("outputs", showWarnings = FALSE)
-saveRDS(MEPSSELECTED_winsorized, "outputs/MEPS_clean.rds")
+saveRDS(MEPS_w, "outputs/MEPS_clean.rds")
 cat("Clean data saved to outputs/MEPS_clean.rds\n")
-
-
-
