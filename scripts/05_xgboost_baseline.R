@@ -1,3 +1,4 @@
+# scripts/05_xgboost_baseline.R
 
 suppressPackageStartupMessages({
   library(dplyr)
@@ -5,33 +6,41 @@ suppressPackageStartupMessages({
   library(xgboost)
   library(ggplot2)
   library(readr)
+  library(scales)
 })
 
 # ---- Load cleaned data + split indexes ----
 dat <- readRDS("outputs/MEPS_clean.rds")
 idx <- readRDS("outputs/split_idx.rds")
 
-# ---- One-hot encode factors (same columns for train/test) ----
+# ---- One-hot encode factors (CANCERDX removed) ----
 MEPS_dummy <- fastDummies::dummy_cols(
   dat,
   select_columns = c(
-    "SEX","INSCOV20","RACEV1X","OFTSMK53","CHDDX","ASTHDX",
-    "DIABDX_M18","HIBPDX","MIDX","EMPHDX","CANCERDX"
+    "SEX","INSCOV20","RACEV1X","OFTSMK53",
+    "CHDDX","ASTHDX","DIABDX_M18","HIBPDX","MIDX","EMPHDX"
   ),
   remove_first_dummy = TRUE,
   remove_selected_columns = TRUE
 )
 
+# ---- Split ----
 train <- MEPS_dummy[idx$train_idx, ]
 test  <- MEPS_dummy[idx$test_idx,  ]
 
+# ---- X / y matrices ----
 X_train <- dplyr::select(train, -TOTEXP20, -TOTEXP20_winsorized)
 y_train <- train$TOTEXP20_winsorized
 X_test  <- dplyr::select(test,  -TOTEXP20, -TOTEXP20_winsorized)
 y_test  <- test$TOTEXP20_winsorized
 
-dtrain <- xgb.DMatrix(as.matrix(X_train), label = y_train)
-dtest  <- xgb.DMatrix(as.matrix(X_test),  label = y_test)
+# Safety: all numeric, no NA
+stopifnot(!anyNA(y_train), !anyNA(y_test))
+X_train <- dplyr::mutate(X_train, dplyr::across(dplyr::everything(), as.numeric))
+X_test  <- dplyr::mutate(X_test,  dplyr::across(dplyr::everything(), as.numeric))
+
+dtrain <- xgboost::xgb.DMatrix(as.matrix(X_train), label = y_train)
+dtest  <- xgboost::xgb.DMatrix(as.matrix(X_test),  label = y_test)
 
 # ---- Train baseline model (with early stopping) ----
 set.seed(123)
@@ -45,7 +54,7 @@ params <- list(
 )
 
 watch <- list(train = dtrain, eval = dtest)
-model_xgb <- xgb.train(
+model_xgb <- xgboost::xgb.train(
   params = params,
   data = dtrain,
   nrounds = 1000,
@@ -63,17 +72,14 @@ pred <- tryCatch({
   } else {
     predict(model_xgb, dtest)
   }
-}, error = function(e) {
-  # Final safety net: just predict with all trees
-  predict(model_xgb, dtest)
-})
+}, error = function(e) predict(model_xgb, dtest))
 
 # ---- Metrics ----
 MAE  <- mean(abs(y_test - pred))
 RMSE <- sqrt(mean((y_test - pred)^2))
 R2   <- 1 - sum((y_test - pred)^2) / sum((y_test - mean(y_test))^2)
 
-# MAPE (winsorized) + corrected MAPE on original scale
+# MAPE (winsorized) + corrected MAPE on original scale (safe division)
 eps <- 1e-8
 MAPE_wins <- mean(abs((y_test - pred) / (y_test + eps))) * 100
 y_orig <- dat[idx$test_idx, ]$TOTEXP20
@@ -93,7 +99,7 @@ readr::write_csv(
 )
 saveRDS(model_xgb, "outputs/models/xgb_baseline.rds")
 
-# ---- Feature importance (ggplot so ggsave works) ----
+# ---- Feature importance ----
 imp <- xgboost::xgb.importance(feature_names = colnames(X_train), model = model_xgb)
 readr::write_csv(imp, "outputs/xgb_importance_baseline.csv")
 
@@ -120,4 +126,4 @@ ggsave("outputs/figures/xgb_pred_vs_actual_baseline.png",
        plot = p_scatter, width = 7, height = 5, dpi = 150)
 
 message("Baseline XGBoost complete -> outputs/xgb_metrics_baseline.csv")
-
+read.csv("outputs/xgb_metrics_baseline.csv")
