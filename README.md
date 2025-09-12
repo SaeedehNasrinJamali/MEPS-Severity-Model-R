@@ -50,7 +50,8 @@ For interpretability, we also report metrics against the original `TOTEXP20` whe
 - All factors above are **one-hot encoded** via `fastDummies::dummy_cols(..., remove_first_dummy=TRUE)` before XGBoost.
 ### XGBoost Results
 
-![Predicted vs Actual](docs/xgb_pred_vs_actual_baseline.png)
+We will seek to improve the XGBoost results by tuning key hyperparameters such as learning rate (eta), gamma, and max_depth to better balance bias and variance. However, it is also important to recognize that the data itself may contain biases, as it is survey-based; a common issue is the high frequency of neutral responses, which can reduce the predictive signal available to the model.
+
 
 
 
