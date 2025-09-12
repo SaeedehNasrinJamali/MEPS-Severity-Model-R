@@ -28,8 +28,7 @@ df <- tibble(pred = pred, actual = y_w)
 MAE  <- mean(abs(y_w - pred))
 RMSE <- sqrt(mean((y_w - pred)^2))
 R2   <- 1 - sum((y_w - pred)^2) / sum((y_w - mean(y_w))^2)
-MAPE_wins <- mean(abs((y_w - pred) / y_w)) * 100
-MAPE_orig <- mean(abs((y_org - pred) / y_org)) * 100
+
 
 dir.create("outputs/figures", recursive = TRUE, showWarnings = FALSE)
 
@@ -101,3 +100,4 @@ p5 <- ggplot(tibble(fitted = pred, resid = resid), aes(fitted, resid)) +
 ggsave("outputs/figures/glm_residuals_vs_fitted.png", p5, width = 7, height = 5, dpi = 150, bg = "white")
 
 message("GLM evaluation complete. Metrics -> outputs/test_metrics_glm.csv | Plots -> outputs/figures/")
+
