@@ -42,7 +42,7 @@ X_test  <- dplyr::mutate(X_test,  dplyr::across(dplyr::everything(), as.numeric)
 dtrain <- xgboost::xgb.DMatrix(as.matrix(X_train), label = y_train)
 dtest  <- xgboost::xgb.DMatrix(as.matrix(X_test),  label = y_test)
 
-# ---- Train baseline model (with early stopping) ----
+# ---- Train baseline model (CV on TRAIN ONLY; no test in watchlist) ----
 set.seed(123)
 params <- list(
   objective = "reg:squarederror",
@@ -53,26 +53,34 @@ params <- list(
   colsample_bytree = 0.8
 )
 
-watch <- list(train = dtrain, eval = dtest)
-model_xgb <- xgboost::xgb.train(
+# Choose number of trees via k-fold CV on TRAIN
+cv <- xgboost::xgb.cv(
   params = params,
   data = dtrain,
-  nrounds = 1000,
-  early_stopping_rounds = 50,
-  watchlist = watch,
+  nrounds = 5000,
+  nfold = 5,
+  early_stopping_rounds = 100,
   verbose = 0
 )
 
-# ---- Predict (robust across API versions) ----
-pred <- tryCatch({
-  if (!is.null(model_xgb$best_iteration) && is.finite(model_xgb$best_iteration)) {
-    predict(model_xgb, dtest, iterationrange = c(0, model_xgb$best_iteration))
-  } else if (!is.null(model_xgb$best_ntreelimit) && is.finite(model_xgb$best_ntreelimit)) {
-    predict(model_xgb, dtest, ntreelimit = model_xgb$best_ntreelimit)
-  } else {
-    predict(model_xgb, dtest)
-  }
-}, error = function(e) predict(model_xgb, dtest))
+best_nrounds <- if (!is.null(cv$best_iteration)) {
+  cv$best_iteration
+} else if (!is.null(cv$best_ntreelimit)) {
+  cv$best_ntreelimit
+} else {
+  which.min(cv$evaluation_log$test_rmse_mean)
+}
+
+# Final model trained on full TRAIN set with selected nrounds
+model_xgb <- xgboost::xgb.train(
+  params = params,
+  data = dtrain,
+  nrounds = best_nrounds,
+  verbose = 0
+)
+
+# ---- Predict (simple, no test leakage) ----
+pred <- predict(model_xgb, dtest)
 
 # ---- Metrics ----
 MAE  <- mean(abs(y_test - pred))
@@ -90,7 +98,8 @@ dir.create("outputs/figures", recursive = TRUE, showWarnings = FALSE)
 
 readr::write_csv(
   data.frame(
-    Model = "XGB_Baseline",
+    Model = "XGB_Baseline_TrainCV",
+    Best_Trees = best_nrounds,
     MAE = MAE, RMSE = RMSE, R2 = R2,
     MAPE_winsorized_pct = MAPE_wins,
     MAPE_original_pct   = MAPE_orig
@@ -126,4 +135,3 @@ ggsave("outputs/figures/xgb_pred_vs_actual_baseline.png",
        plot = p_scatter, width = 7, height = 5, dpi = 150)
 
 message("Baseline XGBoost complete -> outputs/xgb_metrics_baseline.csv")
-read.csv("outputs/xgb_metrics_baseline.csv")
