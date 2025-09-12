@@ -48,10 +48,10 @@ For interpretability, we also report metrics against the original `TOTEXP20` whe
 - **Metrics**: MAE, RMSE, and R² on the test set; MAPE on winsorized **and** a **corrected MAPE** on original `TOTEXP20`.
 ### Encoding notes (for XGBoost)
 - All factors above are **one-hot encoded** via `fastDummies::dummy_cols(..., remove_first_dummy=TRUE)` before XGBoost.
-- The winsorized target is used for training; you additionally see we report a **corrected MAPE** against the original `TOTEXP20` for business interpretability.
 ### XGBoost Results
 
 ![Predicted vs Actual](docs/xgb_pred_vs_actual_baseline.png)
+
 
 
 
